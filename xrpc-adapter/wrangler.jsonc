@@ -1,0 +1,1 @@
+{ "$schema": "node_modules/wrangler/config-schema.json", "name": "isbn-xrpc-adapter", "main": "src/index.ts", "compatibility_date": "2026-04-01", "compatibility_flags": ["nodejs_compat"], "account_id": "4da88288dc30d9ee257f319d3c33ecf0", "workers_dev": false, "routes": [{"pattern": "isbn.etzhayyim.com/xrpc/*", "zone_name": "etzhayyim.com"}] }
