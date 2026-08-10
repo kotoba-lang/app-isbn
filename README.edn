@@ -1,4 +1,4 @@
 {:schema "etzhayyim.repository/v1"
- :name "com-etzhayyim-app-isbn"
+ :name "app-isbn"
  :kind :app
  :canonical-metadata :edn}
