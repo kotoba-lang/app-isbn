@@ -1,0 +1,17 @@
+;; app-isbn — itonami（dapp）の aiueos アプリ記述子（notes.edn 形）。
+;; 判定コアは aiueos/isbn_judgment.cljk（ISO 2108 のチェックデジット検証・変換）。
+;; 正本は kotoba/src/types.ts（ADR-2605203000 Option B Phase E）。pure（:effects #{}）。
+{:aiueos/component :app/isbn
+ :aiueos/kind :app
+ :aiueos/trust :untrusted
+ :aiueos/source "isbn_judgment.cljk"
+ :aiueos/wasm "isbn_judgment.wasm"
+ :aiueos/entry "main"
+ :aiueos/args []
+ :aiueos/imports #{}
+ :aiueos/exports #{:app/main
+                   :app/isbn13-valid
+                   :app/isbn10-valid
+                   :app/isbn10-to-13}
+ :aiueos/effects #{}
+ :aiueos/limits {:memory-pages 16 :fuel 5000000}}
