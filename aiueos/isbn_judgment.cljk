@@ -1,0 +1,95 @@
+(ns isbn.judgment
+  "ISBN 判定コア — itonami dapp bundle（pure, :effects #{}）。
+
+  ISO 2108 のチェックデジット検証と変換の判定
+  （正本: kotoba/src/*.ts の isValidIsbn13 / isbn10To13 / normalizeIsbn —
+  ADR-2605203000 Option B Phase E 参照実装）。
+
+  - isbn13-valid: 13 桁の ISBN-13。重み 1/3 交互の合計が 10 で割り切れる
+  - isbn10-valid: 9 桁 + チェック（10 は X）。重み 10..1 の合計が 11 で割り切れる
+  - isbn10-to-13: 978 + 9 桁 + ISBN-13 チェックデジットの自動変換
+
+  mod は使わず quot で剰余を構成（guest 規約）。数値は i64（13 桁は範囲内）。
+  実行 host はスカラーのみ = KIR v3 / i64/direct ABI（kernel/selfhost 両対応）。
+
+  テストはゼロ引数 test-*、戻り 1/0:
+  <amu> test aiueos/isbn_judgment.cljk"
+  (:export [main isbn13-valid isbn10-valid isbn10-to-13
+            test-isbn13 test-isbn13-bad test-isbn10 test-isbn10-x
+            test-convert test-convert-known]))
+
+(defn main [] :i64
+  0)
+
+(defn- m10 [x :i64] :i64
+  (- x (* 10 (quot x 10))))
+
+(defn- m11 [x :i64] :i64
+  (- x (* 11 (quot x 11))))
+
+(defn- dig [n :i64 k :i64] :i64
+  (if (= k 0)
+    (m10 n)
+    (if (= k 1) (m10 (quot n 10))
+      (if (= k 2) (m10 (quot n 100))
+        (if (= k 3) (m10 (quot n 1000))
+          (if (= k 4) (m10 (quot n 10000))
+            (if (= k 5) (m10 (quot n 100000))
+              (if (= k 6) (m10 (quot n 1000000))
+                (if (= k 7) (m10 (quot n 10000000))
+                  (if (= k 8) (m10 (quot n 100000000))
+                    (if (= k 9) (m10 (quot n 1000000000))
+                      (if (= k 10) (m10 (quot n 10000000000))
+                        (if (= k 11) (m10 (quot n 100000000000))
+                          (m10 (quot n 1000000000000)))))))))))))))
+
+(defn isbn13-valid [n :i64] :i64
+  ;; 重み 1/3 交互（13 桁: ... 最後も 1）。合計 ≡ 0 (mod 10)
+  (if (= (m10 (+ (dig n 0) (* 3 (dig n 1)) (dig n 2) (* 3 (dig n 3))
+                 (dig n 4) (* 3 (dig n 5)) (dig n 6) (* 3 (dig n 7))
+                 (dig n 8) (* 3 (dig n 9)) (dig n 10) (* 3 (dig n 11))
+                 (dig n 12)))
+         0)
+    1 0))
+
+(defn isbn10-valid [nine :i64 check :i64] :i64
+  ;; nine = 上位 9 桁（数値）、check = 0..10（10 は X）。重み 10..1。合計 ≡ 0 (mod 11)
+  (if (= (m11 (+ (* 10 (dig nine 8)) (* 9 (dig nine 7)) (* 8 (dig nine 6))
+                 (* 7 (dig nine 5)) (* 6 (dig nine 4)) (* 5 (dig nine 3))
+                 (* 4 (dig nine 2)) (* 3 (dig nine 1)) (* 2 (dig nine 0))
+                 check))
+         0)
+    1 0))
+
+(defn isbn10-to-13 [nine :i64] :i64
+  ;; 978 + 9 桁 → 12 桁 + ISBN-13 チェックデジット
+  (let [base (+ 978000000000 nine)
+        s (m10 (+ (dig base 0) (* 3 (dig base 1)) (dig base 2) (* 3 (dig base 3))
+                  (dig base 4) (* 3 (dig base 5)) (dig base 6) (* 3 (dig base 7))
+                  (dig base 8) (* 3 (dig base 9)) (dig base 10) (* 3 (dig base 11))))
+        check (m10 (- 10 s))]
+    (+ (* 10 base) check)))
+
+;; --- tests（戻り 1 = pass） ------------------------------------------------
+
+(defn test-isbn13 [] :i64
+  ;; 9784106102844（正本テストの既知ベクタ）
+  (if (= (isbn13-valid 9784106102844) 1) 1 0))
+
+(defn test-isbn13-bad [] :i64
+  (if (= (isbn13-valid 9784106102845) 0) 1 0))
+
+(defn test-isbn10 [] :i64
+  ;; 0-306-40615-2: 030640615 + 2
+  (if (= (isbn10-valid 30640615 2) 1) 1 0))
+
+(defn test-isbn10-x [] :i64
+  ;; チェック 10 は X: 例 0-8044-2957-X → 080442957 + 10
+  (if (= (isbn10-valid 80442957 10) 1) 1 0))
+
+(defn test-convert [] :i64
+  (if (= (isbn13-valid (isbn10-to-13 30640615)) 1) 1 0))
+
+(defn test-convert-known [] :i64
+  ;; 0306406152 → 9780306406157（ISO 2108 の既知変換）
+  (if (= (isbn10-to-13 30640615) 9780306406157) 1 0))
